@@ -26,21 +26,38 @@ def WarpPerspective(image):
 def get_img(img_path="./DSC_0155.JPG"):
     temp_img = cv2.imread(img_path)
     img = cv2.resize(temp_img, (1280, 720))
-    originalImage= cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    untouchedImage= originalImage.copy()
+    untouchedImage= img.copy()
     warped = WarpPerspective(untouchedImage)
     return warped
 
 
 def pipeline():
     warped = get_img()
+    warped = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+    
+    cv2.imshow("Detected Lines (in red) - Probabilistic Line Transform", warped)
+
+    cv2.waitKey(0)
+    #normalizedImg = np.zeros((1280, 720))
+    #warped = cv2.normalize(warped,  normalizedImg, 0, 255, cv2.NORM_MINMAX)
+    # if more than 5 lines are parallel, and their middle points can fit a linear 
+
+    # threshold calculation 
+    highThresh, thresh_im = cv2.threshold(warped, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    lowThresh = 0.5*highThresh
+    
+    kernel = np.ones((2,2),np.uint8)
+    warped = cv2.erode(thresh_im, kernel,iterations = 1)
+    cv2.imshow("Detected Lines (in red) - Probabilistic Line Transform", warped)
+
+    cv2.waitKey(0)
     # Edge detection
-    dst = cv2.Canny(warped, 50, 200, None, 3)
+    dst = cv2.Canny(warped, lowThresh, highThresh, apertureSize = 3)
     # Copy edges to the images that will display the results in BGR
     cdst = cv2.cvtColor(dst, cv2.COLOR_GRAY2BGR)
     cdstP = np.copy(cdst)
 
-    linesP = cv2.HoughLinesP(dst, 1, np.pi / 180, 50, 20, 80, 10)
+    linesP = cv2.HoughLinesP(dst, rho = 1,theta = 1*np.pi/180,threshold = 50, minLineLength = 50,maxLineGap = 20)
 
     if linesP is not None:
         for i in range(0, len(linesP)):
@@ -51,8 +68,7 @@ def pipeline():
     #        l = linesP[i][0]
             cv2.line(cdstP, (l[0], l[1]), (l[2], l[3]), (0,0,255), 3, cv2.LINE_AA)
 
-    #cv2.imshow("Source", src)
-    #cv2.imshow("Detected Lines (in red) - Standard Hough Line Transform", cdst)
+    # if more than 5 lines are parallel, and their middle points can fit a linear 
     cv2.imshow("Detected Lines (in red) - Probabilistic Line Transform", cdstP)
 
     cv2.waitKey(0)
