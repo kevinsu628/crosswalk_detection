@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 import glob, math
+import imutils
 
 
 left=[0,600] #left bottom most point of trapezium
@@ -22,25 +23,101 @@ def WarpPerspective(image):
     M = cv2.getPerspectiveTransform(src, dst)
     return cv2.warpPerspective(image, M, (x,y), flags=cv2.INTER_LINEAR)
 
+# will return the contour of black/white threshold of the bird view image 
+def process_img(img_path="./DSC_0155.JPG"):
+    orig = cv2.imread(img_path)
+    # resize
+    orig = cv2.resize(orig, (1280, 720))
+    # convert the resized image to grayscale
+    img = cv2.cvtColor(orig, cv2.COLOR_BGR2GRAY)
+    # convert to bird view 
+    warped = WarpPerspective(img)
+    # add gaussian blur 
+    blurred = cv2.GaussianBlur(warped, (5, 5), 0)
+    # threshold black and white 
+    highThresh, thresh_im = cv2.threshold(warped, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    lowThresh = 0.5*highThresh
+    # erode the image     
+    kernel = np.ones((2,2),np.uint8)
+    eroded_img = cv2.erode(thresh_im, kernel,iterations = 1)
+    
+    cv2.imshow("Image", eroded_img)
+    cv2.waitKey(0)
 
-def get_img_cnts(img_path="./DSC_0155.JPG"):
-    img = cv2.imread(img_path)
-    resized = cv2.resize(img, (1280, 720))
-    img = WarpPerspective(img)
+    # find contours 
+    cnts = cv2.findContours(thresh_im.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = imutils.grab_contours(cnts)
 
-    ratio = img.shape[0] / float(resized.shape[0])
-    # convert the resized image to grayscale, blur it slightly,
-    # and threshold it
-    gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    thresh = cv2.threshold(blurred, 60, 255, cv2.THRESH_BINARY)[1]
- 
-    # find contours in the thresholded image and initialize the
+    return orig, cnts
+
+def is_crosswalk(xmin, xmax, ymin, ymax):
+    # width of the contour shouldn't be too small 
+    if (xmax - xmin) < 50:
+        return False
+    # shouldn't be too thin otherwise is a roadline 
+    if (xmax - xmin) != 0 and (ymax - ymin)/(xmax - xmin) > 4:
+        return False
+    else:
+        return True
+
+def process_cnts(cnts):
+    img = np.zeros((720,1280,3), np.uint8)
+    # filter out the contours that are more likely a cross walk 
+    filtered_cnts = []
+    xmaxes = []
+    ymaxes = []
+    for c in cnts:
+        # if contours points too few, drop 
+        if c.shape[0] < 50:
+            continue
+        else:
+            #print("##########")
+            #print(c)
+            [xmax, ymax] = np.amax(c, axis=0)[0]
+            [xmin, ymin] = np.amin(c, axis=0)[0]
+            #print([xmin, xmax, ymin, ymax])
+            if is_crosswalk(xmin, xmax, ymin, ymax):
+                filtered_cnts.append(c)
+                xmaxes.append(xmax)
+                ymaxes.append(ymax)
+
+    cv2.drawContours(img, filtered_cnts, -1, (0, 255, 0), 3)
+
+    return img, xmaxes, ymaxes
+
+def draw_stopline(orig, new_img, xmaxes, ymaxes):
+    if len(ymaxes) == 0 or len(xmaxes) == 0:
+        print(xmaxes)
+        print(ymaxes)
+        return None
+    k, b = np.polyfit(xmaxes, ymaxes, deg=1)
+
+    x1, x2 = np.amin(xmaxes), np.amax(xmaxes)
+    cv2.line(new_img, (int(x1), int(k*x1+b)), (int(x2), int(k*x2+b)), (0,255,0), 3)
+    cv2.imshow("Image", new_img)
+    cv2.waitKey(0)
+
+    Minv = cv2.getPerspectiveTransform(src, dst)
+
+    newwarp = cv2.warpPerspective(new_img, Minv, (1280, 720))
+    result = cv2.addWeighted(orig, 1, newwarp, 0.5, 0)
+
+    cv2.imshow("Image", resultx)
+    cv2.waitKey(0)
+
+
+orig_img, cnts = process_img("./DSC_0153.JPG")
+new_img, xmaxes, ymaxes = process_cnts(cnts)
+draw_stopline(orig_img, new_img, xmaxes, ymaxes)
+
+## TODO: transform back 
+## TODO: need to add another sanity check: left gradient and right gradient should be similar 
+'''
+
+# find contours in the thresholded image and initialize the
     # shape detector
     cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
-
-    return cnts, ratio, resized
 
 
 class ShapeDetector:
@@ -131,4 +208,4 @@ def pipeline():
 
 
 pipeline()
-
+'''
