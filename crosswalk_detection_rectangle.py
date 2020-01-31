@@ -50,12 +50,12 @@ def process_img(img_path="./DSC_0155.JPG"):
 
     return orig, cnts
 
-def is_crosswalk(xmin, xmax, ymin, ymax):
+def is_crosswalk(x1, x2, y1, y2):
     # width of the contour shouldn't be too small 
-    if (xmax - xmin) < 50:
+    if (x2 - x1) < 50:
         return False
     # shouldn't be too thin otherwise is a roadline 
-    if (xmax - xmin) != 0 and (ymax - ymin)/(xmax - xmin) > 4:
+    if (x2 - x1) != 0 and (y2 - y1)/(x2 - x1) > 4:
         return False
     else:
         return True
@@ -66,22 +66,26 @@ def process_cnts(cnts):
     filtered_cnts = []
     xmaxes = []
     ymaxes = []
+
     for c in cnts:
         # if contours points too few, drop 
         if c.shape[0] < 50:
             continue
-        else:
-            #print("##########")
-            #print(c)
-            [xmax, ymax] = np.amax(c, axis=0)[0]
-            [xmin, ymin] = np.amin(c, axis=0)[0]
-            #print([xmin, xmax, ymin, ymax])
-            if is_crosswalk(xmin, xmax, ymin, ymax):
-                filtered_cnts.append(c)
-                xmaxes.append(xmax)
-                ymaxes.append(ymax)
-
-    cv2.drawContours(img, filtered_cnts, -1, (0, 255, 0), 3)
+        else: 
+            ((cx, cy), (w, h), theta) = cv2.minAreaRect(c)
+            t = math.sqrt(w**2 + h**2)/2
+            ## TODO: find upper left using min(x+y) function 
+            x1, x2, y1, y2 = cx - math.sin(theta)*t, cx + math.sin(theta)*t, cy - math.cos(theta)*t, cy + math.cos(theta)*t
+            cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0,255,0), 3)
+            #if is_crosswalk(x1, x2, y1, y2):
+            #    filtered_cnts.append(c)
+            #    cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0,255,0), 3)
+            #    xmaxes.append(x2)
+            #    ymaxes.append(y2)
+            cv2.drawContours(img, c, -1, (0, 255, 0), 3)
+    #cv2.drawContours(img, filtered_cnts, -1, (0, 255, 0), 3)
+    cv2.imshow("Image", img)
+    cv2.waitKey(0)
 
     return img, xmaxes, ymaxes
 
@@ -108,7 +112,7 @@ def draw_stopline(orig, new_img, xmaxes, ymaxes):
 
 orig_img, cnts = process_img("./DSC_0153.JPG")
 new_img, xmaxes, ymaxes = process_cnts(cnts)
-draw_stopline(orig_img, new_img, xmaxes, ymaxes)
+#draw_stopline(orig_img, new_img, xmaxes, ymaxes)
 
 ## TODO: transform back 
 ## TODO: need to add another sanity check: left gradient and right gradient should be similar 
