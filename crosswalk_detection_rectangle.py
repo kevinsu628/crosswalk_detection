@@ -50,12 +50,13 @@ def process_img(img_path="./DSC_0155.JPG"):
 
     return orig, cnts
 
-def is_crosswalk(x1, x2, y1, y2):
-    # width of the contour shouldn't be too small 
-    if (x2 - x1) < 50:
+def is_crosswalk(w, h, box): # w, h of the rect, plus the box
+    # check if a minAreaRect box is a cross walk 
+    # area shouldn't be too small
+    if w*h < 4800 or w*h > 30000: # 40 * 120 || 100 * 300
         return False
     # shouldn't be too thin otherwise is a roadline 
-    if (x2 - x1) != 0 and (y2 - y1)/(x2 - x1) > 4:
+    if h/w > 4:
         return False
     else:
         return True
@@ -64,40 +65,47 @@ def process_cnts(cnts):
     img = np.zeros((720,1280,3), np.uint8)
     # filter out the contours that are more likely a cross walk 
     filtered_cnts = []
-    xmaxes = []
-    ymaxes = []
+    crosswalk_boxes = []
 
     for c in cnts:
         # if contours points too few, drop 
         if c.shape[0] < 50:
             continue
         else: 
-            ((cx, cy), (w, h), theta) = cv2.minAreaRect(c)
-            t = math.sqrt(w**2 + h**2)/2
+            ((cx, cy), (w, h), theta) = rect = cv2.minAreaRect(c) #((cx, cy), (w, h), theta)
+            # convert to box2d 
+            box = cv2.boxPoints(rect) 
+            box = np.int0(box)
+            print(box)
+            print(rect)
+            cv2.drawContours(img,[box],0,(0,0,255),2)
+            #t = math.sqrt(w**2 + h**2)/2
             ## TODO: find upper left using min(x+y) function 
-            x1, x2, y1, y2 = cx - math.sin(theta)*t, cx + math.sin(theta)*t, cy - math.cos(theta)*t, cy + math.cos(theta)*t
-            cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0,255,0), 3)
-            #if is_crosswalk(x1, x2, y1, y2):
-            #    filtered_cnts.append(c)
-            #    cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0,255,0), 3)
-            #    xmaxes.append(x2)
-            #    ymaxes.append(y2)
-            cv2.drawContours(img, c, -1, (0, 255, 0), 3)
-    #cv2.drawContours(img, filtered_cnts, -1, (0, 255, 0), 3)
+            #x1, x2, y1, y2 = cx - math.sin(theta)*t, cx + math.sin(theta)*t, cy - math.cos(theta)*t, cy + math.cos(theta)*t
+
+            #cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0,255,0), 3)
+            if is_crosswalk(w, h, box):
+                filtered_cnts.append(c)
+                crosswalk_boxes.append(box)
+                
+            #cv2.drawContours(img, c, -1, (0, 255, 0), 3)
+    cv2.drawContours(img, filtered_cnts, -1, (0, 255, 0), 3)
     cv2.imshow("Image", img)
     cv2.waitKey(0)
 
-    return img, xmaxes, ymaxes
+    return img, np.array(crosswalk_boxes)
 
-def draw_stopline(orig, new_img, xmaxes, ymaxes):
-    if len(ymaxes) == 0 or len(xmaxes) == 0:
-        print(xmaxes)
-        print(ymaxes)
+def draw_stopline(orig, new_img, boxes):
+    if len(boxes)== 0:
         return None
-    k, b = np.polyfit(xmaxes, ymaxes, deg=1)
 
-    x1, x2 = np.amin(xmaxes), np.amax(xmaxes)
-    cv2.line(new_img, (int(x1), int(k*x1+b)), (int(x2), int(k*x2+b)), (0,255,0), 3)
+    print(boxes)
+    
+    xs = boxes[:,0,:][:,0]
+    ys = boxes[:,0,:][:,1]
+    
+    x1_ind, x2_ind = np.argmin(xs), np.argmax(xs)
+    cv2.line(new_img, (int(xs[x1_ind]), int(ys[x1_ind])), (int(xs[x2_ind]), int(ys[x2_ind])), (0,255,0), 3)
     cv2.imshow("Image", new_img)
     cv2.waitKey(0)
 
@@ -110,9 +118,9 @@ def draw_stopline(orig, new_img, xmaxes, ymaxes):
     cv2.waitKey(0)
 
 
-orig_img, cnts = process_img("./DSC_0153.JPG")
-new_img, xmaxes, ymaxes = process_cnts(cnts)
-#draw_stopline(orig_img, new_img, xmaxes, ymaxes)
+orig_img, cnts = process_img() #"./DSC_0153.JPG"
+new_img, boxes = process_cnts(cnts)
+draw_stopline(orig_img, new_img, boxes)
 
 ## TODO: transform back 
 ## TODO: need to add another sanity check: left gradient and right gradient should be similar 
