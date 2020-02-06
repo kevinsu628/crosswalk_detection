@@ -35,7 +35,7 @@ def process_img(img_path="./DSC_0155.JPG"):
     # add gaussian blur 
     blurred = cv2.GaussianBlur(warped, (5, 5), 0)
     # threshold black and white 
-    highThresh, thresh_im = cv2.threshold(warped, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    highThresh, thresh_im = cv2.threshold(warped, 133, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     lowThresh = 0.5*highThresh
     # erode the image     
     kernel = np.ones((2,2),np.uint8)
@@ -109,12 +109,12 @@ def draw_stopline(orig, new_img, boxes):
     cv2.imshow("Image", new_img)
     cv2.waitKey(0)
 
-    Minv = cv2.getPerspectiveTransform(src, dst)
+    Minv = cv2.getPerspectiveTransform(dst, src)
 
     newwarp = cv2.warpPerspective(new_img, Minv, (1280, 720))
     result = cv2.addWeighted(orig, 1, newwarp, 0.5, 0)
 
-    cv2.imshow("Image", resultx)
+    cv2.imshow("Image", result)
     cv2.waitKey(0)
 
 
